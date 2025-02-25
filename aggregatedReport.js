@@ -15,6 +15,8 @@
     }
   }
 
+  const currentPage = parseInt(urlParams.get("pageFrom"), 10) || 1;
+  const offset = (currentPage - 1) * 50;
   const sortField = urlParams.get("sortField") || "views";
   const sortDirection = urlParams.get("sortDirection") || "desc";
 
@@ -41,12 +43,96 @@
     const btn = document.createElement('button');
     btn.textContent = "Скачать агрегированный CTR отчет для всех объявлений";
     btn.style.cssText = 'padding: 5px 10px; font-size: 12px; background-color: #99CCFF; color: dark; border: none; border-radius: 4px; cursor: pointer;';
+
+    // Блокируем кнопку до загрузки библиотеки XLSX
+    btn.disabled = true;
+    btn.textContent += " (Загрузка библиотеки...)";
+
+    // Предварительно загружаем XLSX
+    loadXLSX().then(() => {
+      console.log("После загрузки библиотеки, window.XLSX:", window.XLSX);
+      btn.disabled = false;
+      btn.textContent = "Скачать агрегированный CTR отчет для всех объявлений";
+    }).catch(error => {
+      console.error("Ошибка при предварительной загрузке XLSX:", error);
+      btn.textContent = "Ошибка загрузки библиотеки XLSX";
+    });
+
     btn.addEventListener("click", () => {
-      generateAggregatedReport(dateFrom, dateTo);
+      btn.disabled = true;
+      loadXLSX().then(() => {
+        console.log("Перед вызовом generateAggregatedReport, window.XLSX:", window.XLSX);
+        generateAggregatedReport(dateFrom, dateTo).finally(() => {
+          btn.disabled = false;
+        });
+      }).catch(err => {
+        console.error("Ошибка при загрузке XLSX:", err);
+        alert("Ошибка при загрузке библиотеки XLSX");
+        btn.disabled = false;
+      });
     });
     containerDiv.appendChild(btn);
 
     wrapper.parentNode.insertBefore(containerDiv, listContainer);
+  }
+
+  let xlsxPromise = null;
+  function loadXLSX() {
+    if (window.XLSX) {
+      console.log("XLSX уже загружен");
+      return Promise.resolve(window.XLSX);
+    }
+    if (!xlsxPromise) {
+      xlsxPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.id = 'xlsx-lib';
+        script.src = chrome.runtime.getURL('lib/xlsx.full.min.js');
+        script.type = 'text/javascript';
+        script.async = true;
+        script.onload = () => {
+          console.log("Событие onload для библиотеки XLSX получено, ждем 50мс для инициализации");
+          // Небольшая задержка для завершения инициализации библиотеки
+          setTimeout(() => {
+            if (window.XLSX) {
+              console.log("XLSX доступен после задержки:", window.XLSX);
+              resolve(window.XLSX);
+            } else {
+              console.error("XLSX всё еще undefined после задержки");
+              reject(new Error("XLSX не найден после загрузки"));
+            }
+          }, 1000);
+        };
+        script.onerror = (err) => {
+          console.error("Ошибка загрузки скрипта XLSX", err);
+          reject(err);
+        };
+        document.head.appendChild(script);
+      });
+    }
+    return xlsxPromise;
+  }
+
+  function generateExcelFile(data, fileName) {
+    return loadXLSX().then(() => {
+      if (!window.XLSX) {
+        console.error("XLSX не определен в момент генерации Excel файла");
+        throw new Error("XLSX is not defined");
+      }
+      try {
+        console.log("Создание листа Excel с данными:", data);
+        const worksheet = window.XLSX.utils.aoa_to_sheet(data);
+        const workbook = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(workbook, worksheet, "Отчет");
+        window.XLSX.writeFile(workbook, fileName);
+        console.log("Excel файл успешно сгенерирован");
+      } catch (error) {
+        console.error("Ошибка при генерации Excel файла:", error);
+        throw error;
+      }
+    }).catch(err => {
+      console.error("Ошибка при загрузке XLSX:", err);
+      alert("Ошибка при загрузке библиотеки XLSX");
+    });
   }
 
   async function generateAggregatedReport(dateFrom, dateTo) {
@@ -54,7 +140,7 @@
       const requestBody = {
         layout: "pro_filters",
         limit: 50,
-        offset: 0,
+        offset: offset,
         filters: {
           tabs: "active",
           statistics: {
@@ -130,7 +216,7 @@
           totalViews += parseFloat(day.views) || 0;
         });
         const avgCTR = totalImpressions > 0 ? ((totalViews / totalImpressions) * 100).toFixed(1) : "0.0";
-        reportData.push([adIds[index], `${dateFrom} - ${dateTo}`, avgCTR]);
+        reportData.push([adIds[index], `${dateFrom} - ${dateTo}`, avgCTR, totalViews, totalImpressions]);
       });
 
       if (!reportData.length) {
@@ -139,49 +225,32 @@
       }
 
       const xlsxData = [
-        ["Объявление (ID)", "Период", "Средний CTR за период"],
+        ["Объявление (ID)", "Период", "Средний CTR за период", "Средние просмотры", "Средние показы"],
         ...reportData
       ];
-      generateExcelFile(xlsxData, 'aggregated_ctr_report.xlsx');
+      await generateExcelFile(xlsxData, 'aggregated_ctr_report.xlsx');
     } catch (e) {
       console.error("Ошибка при генерации агрегированного отчета", e);
     }
   }
 
-  let xlsxPromise = null;
-function loadXLSX() {
-  if (window.XLSX) return Promise.resolve(window.XLSX);
-  if (!xlsxPromise) {
-    xlsxPromise = new Promise((resolve, reject) => {
-      if (!document.getElementById('xlsx-lib')) {
-        const script = document.createElement('script');
-        script.id = 'xlsx-lib';
-        script.src = chrome.runtime.getURL('lib/xlsx.full.min.js');
-        script.type = 'text/javascript';
-        script.async = true;
-        script.onload = () => resolve(window.XLSX);
-        script.onerror = () => reject(new Error('Failed to load XLSX library'));
-        document.head.appendChild(script);
+  function observeAndAddButton() {
+    const targetNode = document.body;
+    const config = { childList: true, subtree: true };
+    const observer = new MutationObserver((mutationsList, obs) => {
+      const wrapper = document.querySelector('.styles-wrapper-LZlSA.styles-narrow-HsBO5');
+      const listContainer = document.querySelector('.style-list-container-SP3qU');
+      if (wrapper && listContainer) {
+        addAggregatedReportButton();
+        obs.disconnect();
       }
     });
+    observer.observe(targetNode, config);
   }
-  return xlsxPromise;
-}
-
-function generateExcelFile(data, fileName) {
-  loadXLSX().then(() => {
-    const worksheet = XLSX.utils.aoa_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Отчет");
-    XLSX.writeFile(workbook, fileName);
-  }).catch(err => {
-    console.error("Ошибка при загрузке XLSX:", err);
-  });
-}
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", addAggregatedReportButton);
   } else {
-    addAggregatedReportButton();
+    observeAndAddButton();
   }
 })();

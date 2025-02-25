@@ -4,7 +4,6 @@
   "version": "1.0",
   "description": "Расширение для автоматического подсчета CTR на странице объявления Avito",
   "action": {
-    "default_popup": "popup.html",
     "default_title": "Avito CTR Toggle",
     "default_icon": {
       "128": "icons/icon128.png"
@@ -23,8 +22,8 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://www.avito.ru/profile/pro/items?expandedItemId=*"],
-      "js": ["lib/xlsx.full.min.js"]
+      "matches": ["*://www.avito.ru/*"],
+      "js": ["lib/xlsx.full.min.js", "aggregatedReport.js"]
     }
   ],
   "host_permissions": [
@@ -35,7 +34,7 @@
   "web_accessible_resources": [
     {
       "resources": ["lib/xlsx.full.min.js"],
-      "matches": ["<all_urls>"]
+      "matches": ["*://www.avito.ru/*"]
     }
   ],
   "content_security_policy": {
