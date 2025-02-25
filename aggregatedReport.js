@@ -10,9 +10,7 @@
         dateFrom = filtersObj.statistics.from;
         dateTo = filtersObj.statistics.to;
       }
-    } catch (e) {
-      console.error("Ошибка парсинга filters", e);
-    }
+    } catch (e) {}
   }
 
   const currentPage = parseInt(urlParams.get("pageFrom"), 10) || 1;
@@ -44,29 +42,23 @@
     btn.textContent = "Скачать агрегированный CTR отчет для всех объявлений";
     btn.style.cssText = 'padding: 5px 10px; font-size: 12px; background-color: #99CCFF; color: dark; border: none; border-radius: 4px; cursor: pointer;';
 
-    // Блокируем кнопку до загрузки библиотеки XLSX
     btn.disabled = true;
     btn.textContent += " (Загрузка библиотеки...)";
 
-    // Предварительно загружаем XLSX
     loadXLSX().then(() => {
-      console.log("После загрузки библиотеки, window.XLSX:", window.XLSX);
       btn.disabled = false;
       btn.textContent = "Скачать агрегированный CTR отчет для всех объявлений";
-    }).catch(error => {
-      console.error("Ошибка при предварительной загрузке XLSX:", error);
+    }).catch(() => {
       btn.textContent = "Ошибка загрузки библиотеки XLSX";
     });
 
     btn.addEventListener("click", () => {
       btn.disabled = true;
       loadXLSX().then(() => {
-        console.log("Перед вызовом generateAggregatedReport, window.XLSX:", window.XLSX);
         generateAggregatedReport(dateFrom, dateTo).finally(() => {
           btn.disabled = false;
         });
-      }).catch(err => {
-        console.error("Ошибка при загрузке XLSX:", err);
+      }).catch(() => {
         alert("Ошибка при загрузке библиотеки XLSX");
         btn.disabled = false;
       });
@@ -79,7 +71,6 @@
   let xlsxPromise = null;
   function loadXLSX() {
     if (window.XLSX) {
-      console.log("XLSX уже загружен");
       return Promise.resolve(window.XLSX);
     }
     if (!xlsxPromise) {
@@ -90,20 +81,15 @@
         script.type = 'text/javascript';
         script.async = true;
         script.onload = () => {
-          console.log("Событие onload для библиотеки XLSX получено, ждем 50мс для инициализации");
-          // Небольшая задержка для завершения инициализации библиотеки
           setTimeout(() => {
             if (window.XLSX) {
-              console.log("XLSX доступен после задержки:", window.XLSX);
               resolve(window.XLSX);
             } else {
-              console.error("XLSX всё еще undefined после задержки");
               reject(new Error("XLSX не найден после загрузки"));
             }
           }, 1000);
         };
         script.onerror = (err) => {
-          console.error("Ошибка загрузки скрипта XLSX", err);
           reject(err);
         };
         document.head.appendChild(script);
@@ -115,22 +101,17 @@
   function generateExcelFile(data, fileName) {
     return loadXLSX().then(() => {
       if (!window.XLSX) {
-        console.error("XLSX не определен в момент генерации Excel файла");
         throw new Error("XLSX is not defined");
       }
       try {
-        console.log("Создание листа Excel с данными:", data);
         const worksheet = window.XLSX.utils.aoa_to_sheet(data);
         const workbook = window.XLSX.utils.book_new();
         window.XLSX.utils.book_append_sheet(workbook, worksheet, "Отчет");
         window.XLSX.writeFile(workbook, fileName);
-        console.log("Excel файл успешно сгенерирован");
       } catch (error) {
-        console.error("Ошибка при генерации Excel файла:", error);
         throw error;
       }
-    }).catch(err => {
-      console.error("Ошибка при загрузке XLSX:", err);
+    }).catch(() => {
       alert("Ошибка при загрузке библиотеки XLSX");
     });
   }
@@ -229,9 +210,7 @@
         ...reportData
       ];
       await generateExcelFile(xlsxData, 'aggregated_ctr_report.xlsx');
-    } catch (e) {
-      console.error("Ошибка при генерации агрегированного отчета", e);
-    }
+    } catch (e) {}
   }
 
   function observeAndAddButton() {
