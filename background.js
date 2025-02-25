@@ -5,7 +5,14 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         target: { tabId: tabId },
         func: checkAndRunScript
       });
-    } else {
+    }
+    else if (tab.url.startsWith("https://www.avito.ru/profile/pro/items?filters")) {
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ['aggregatedReport.js']
+      });
+    }
+    else {
       chrome.scripting.executeScript({
         target: { tabId: tabId },
         func: removeExecutedFlag
@@ -47,7 +54,6 @@ async function checkAndRunScript() {
     const dataFull = await responseFull.json();
     const statsFull = dataFull.data;
     if (!statsFull || !statsFull.length) {
-      console.error('Нет статистических данных за полный период');
       return;
     }
 
@@ -93,14 +99,12 @@ async function checkAndRunScript() {
     const data30 = await response30.json();
     const stats30 = data30.data;
     if (!stats30 || !stats30.length) {
-      console.error('Нет статистических данных за последние 30 дней');
       return;
     }
     const last30DaysCTRResults = calculateCTR(stats30);
 
     const firstChartContainer = document.querySelector('.styles-chart-R_KjW');
     if (!firstChartContainer) {
-      console.error('Не найден контейнер для графика');
       return;
     }
     const ctrContainer = document.createElement('div');
