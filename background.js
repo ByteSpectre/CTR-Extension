@@ -5,14 +5,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         target: { tabId: tabId },
         func: checkAndRunScript
       });
-    }
-    else if (tab.url.startsWith("https://www.avito.ru/profile/pro/items?filters")) {
+    } else if (tab.url.startsWith("https://www.avito.ru/profile/pro/items?filters")) {
       chrome.scripting.executeScript({
         target: { tabId: tabId },
         files: ['aggregatedReport.js']
       });
-    }
-    else {
+    } else {
       chrome.scripting.executeScript({
         target: { tabId: tabId },
         func: removeExecutedFlag
@@ -22,10 +20,28 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 async function checkAndRunScript() {
+  function waitForElement(selector, timeout = 10000) {
+    return new Promise((resolve, reject) => {
+      const interval = setInterval(() => {
+        const el = document.querySelector(selector);
+        if (el) {
+          clearInterval(interval);
+          resolve(el);
+        }
+      }, 100);
+      setTimeout(() => {
+        clearInterval(interval);
+        reject(new Error("Элемент не найден: " + selector));
+      }, timeout);
+    });
+  }
+
+
   try {
+    const chartContainer = await waitForElement('.styles-chart-R_KjW');
+    const titleContainer = await waitForElement('.styles-title-AvKGs');
     const currentUrl = window.location.href;
     const decodedUrl = decodeURIComponent(currentUrl);
-
     const itemIdMatch = decodedUrl.match(/expandedItemId=(\d+)/);
     const itemId = itemIdMatch ? Number(itemIdMatch[1]) : null;
     const dateFromMatch = decodedUrl.match(/"from":"(\d{4}-\d{2}-\d{2})"/);
@@ -50,12 +66,12 @@ async function checkAndRunScript() {
         dateTo: dateToURL
       })
     });
+
     if (!responseFull.ok) throw new Error(`Ошибка HTTP (полный период): ${responseFull.status}`);
     const dataFull = await responseFull.json();
     const statsFull = dataFull.data;
-    if (!statsFull || !statsFull.length) {
+    if (!statsFull || !statsFull.length) 
       return;
-    }
 
     function calculateCTR(statsArray) {
       return statsArray.map(dayStat => {
@@ -65,24 +81,22 @@ async function checkAndRunScript() {
         const date = new Date(dayStat.date);
         return {
           date: `${date.getDate()} ${[
-          'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-          'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-        ][date.getMonth()]}`,
-          impressions: impressions,
-          views: views,
+            'января','февраля','марта','апреля','мая','июня',
+            'июля','августа','сентября','октября','ноября','декабря'
+          ][date.getMonth()]}`,
+          impressions,
+          views,
           ctr: ctr.toFixed(1)
         };
       });
     }
 
     const fullPeriodCTRResults = calculateCTR(statsFull);
-
     const today = new Date();
     const date30DaysAgo = new Date(today);
     date30DaysAgo.setDate(today.getDate() - 30);
     const todayStr = today.toISOString().slice(0, 10);
     const date30Str = date30DaysAgo.toISOString().slice(0, 10);
-
     const response30 = await fetch('https://www.avito.ru/web/2/sellers/pro/statistics/item', {
       method: 'POST',
       headers: {
@@ -95,75 +109,75 @@ async function checkAndRunScript() {
         dateTo: todayStr
       })
     });
+
     if (!response30.ok) throw new Error(`Ошибка HTTP (30 дней): ${response30.status}`);
     const data30 = await response30.json();
     const stats30 = data30.data;
-    if (!stats30 || !stats30.length) {
+    if (!stats30 || !stats30.length) 
       return;
-    }
-    const last30DaysCTRResults = calculateCTR(stats30);
 
-    const firstChartContainer = document.querySelector('.styles-chart-R_KjW');
-    if (!firstChartContainer) {
+    const last30DaysCTRResults = calculateCTR(stats30);
+    const chartElements = document.querySelectorAll('.styles-chart-R_KjW');
+    if (!chartElements.length) 
       return;
-    }
+    
+    const firstChart = chartElements[0];
     const ctrContainer = document.createElement('div');
     ctrContainer.id = 'ctr-container';
-    ctrContainer.style.cssText =
-    'display: flex; width: 94%; padding-left: 40px; margin-top: 5px; padding-right: 15px; white-space: nowrap; font-size: 10px;';
-
-    last30DaysCTRResults.forEach(result => {
-      const dayBlock = document.createElement('span');
-      dayBlock.style.cssText =
-      'font-weight: 600; flex: 1; text-align: center; width: 24px; color: #000000;';
-      dayBlock.textContent = result.ctr;
-      ctrContainer.appendChild(dayBlock);
-    });
-
-    firstChartContainer.parentNode.insertBefore(ctrContainer, firstChartContainer.nextSibling);
-
-    const titleContainer = document.querySelector('.styles-title-AvKGs');
-    if (titleContainer) {
-      const downloadButton = document.createElement('button');
-      downloadButton.id = 'download-button';
-      downloadButton.textContent = 'Скачать CTR отчет';
-      downloadButton.style.cssText =
-      'padding: 5px 10px; font-size: 12px; background-color: #99CCFF; color: dark; border: none; border-radius: 4px; cursor: pointer; margin-right: 53%;';
-
-      const h5Element = titleContainer.querySelector('h5');
-      const legendContainer = titleContainer.querySelector('.styles-legend-KpvHE');
-      if (h5Element && legendContainer) {
-        titleContainer.insertBefore(downloadButton, legendContainer);
-      }
-
-      downloadButton.addEventListener('click', () => {
-        if (typeof XLSX === 'undefined') {
-          const script = document.createElement('script');
-          script.src = chrome.runtime.getURL('lib/xlsx.full.min.js');
-          script.type = 'text/javascript';
-          script.async = true;
-          script.onload = () => generateReport();
-          document.head.appendChild(script);
-        } else {
-          generateReport();
-        }
+    ctrContainer.style.cssText = 'display: flex; width: 94%; padding-left: 40px; margin-top: 5px; padding-right: 15px; white-space: nowrap; font-size: 10px;';
+    ctrContainer.textContent = "Тут будет CTR для первой таблицы";
+    firstChart.parentNode.insertBefore(ctrContainer, firstChart.nextSibling);
+    
+    setTimeout(() => {
+      ctrContainer.innerHTML = "";
+      last30DaysCTRResults.forEach(result => {
+        const dayBlock = document.createElement('span');
+        dayBlock.style.cssText =
+          'font-weight: 600; flex: 1; text-align: center; width: 24px; color: #000000;';
+        dayBlock.textContent = result.ctr;
+        ctrContainer.appendChild(dayBlock);
       });
-
-      function generateReport() {
-        const xlsxData = [
-          ['День', 'Показы', 'Просмотры', '%CTR'],
-          ...fullPeriodCTRResults.map(item => [item.date, item.impressions, item.views, item.ctr])
-        ];
-        const worksheet = XLSX.utils.aoa_to_sheet(xlsxData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'CTR Отчет');
-        const fileName = `ctr_report_${itemId}.xlsx`;
-        XLSX.writeFile(workbook, fileName);
-      }
+    }, 300);
+    
+    const downloadButton = document.createElement('button');
+    downloadButton.id = 'download-button';
+    downloadButton.textContent = 'Скачать CTR отчет';
+    downloadButton.style.cssText =
+      'padding: 5px 10px; font-size: 12px; background-color: #99CCFF; color: dark; border: none; border-radius: 4px; cursor: pointer; margin-right: 53%;';
+    
+    const h5Element = titleContainer.querySelector('h5');
+    const legendContainer = titleContainer.querySelector('.styles-legend-KpvHE');
+    if (h5Element && legendContainer) {
+      titleContainer.insertBefore(downloadButton, legendContainer);
     }
-  } catch (error) {
-    console.error('Ошибка при запросе данных:', error);
-  }
+    
+    downloadButton.addEventListener('click', () => {
+      if (typeof XLSX === 'undefined') {
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('lib/xlsx.full.min.js');
+        script.type = 'text/javascript';
+        script.async = true;
+        script.onload = () => {
+          generateReport();
+        };
+        document.head.appendChild(script);
+      } else {
+        generateReport();
+      }
+    });
+    
+    function generateReport() {
+      const xlsxData = [
+        ['День', 'Показы', 'Просмотры', '%CTR'],
+        ...fullPeriodCTRResults.map(item => [item.date, item.impressions, item.views, item.ctr])
+      ];
+      const worksheet = XLSX.utils.aoa_to_sheet(xlsxData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'CTR Отчет');
+      const fileName = `ctr_report_${itemId}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    }
+  } catch (error) {}
 }
 
 function removeExecutedFlag() {
