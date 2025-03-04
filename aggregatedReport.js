@@ -39,28 +39,32 @@
     containerDiv.style.cssText = "margin: 10px 0; text-align: center;";
 
     const btn = document.createElement('button');
-    btn.textContent = "Скачать агрегированный CTR отчет для всех объявлений";
+    const originalText = "Скачать агрегированный CTR отчет для всех объявлений";
+    btn.textContent = originalText;
     btn.style.cssText = 'padding: 5px 10px; font-size: 12px; background-color: #99CCFF; color: dark; border: none; border-radius: 4px; cursor: pointer;';
-
+    
     btn.disabled = true;
     btn.textContent += " (Загрузка библиотеки...)";
 
     loadXLSX().then(() => {
       btn.disabled = false;
-      btn.textContent = "Скачать агрегированный CTR отчет для всех объявлений";
+      btn.textContent = originalText;
     }).catch(() => {
       btn.textContent = "Ошибка загрузки библиотеки XLSX";
     });
 
     btn.addEventListener("click", () => {
       btn.disabled = true;
+      btn.textContent = "Подождите... идет генерация отчета";
       loadXLSX().then(() => {
         generateAggregatedReport(dateFrom, dateTo).finally(() => {
           btn.disabled = false;
+          btn.textContent = originalText;
         });
       }).catch(() => {
         alert("Ошибка при загрузке библиотеки XLSX");
         btn.disabled = false;
+        btn.textContent = originalText;
       });
     });
     containerDiv.appendChild(btn);
