@@ -22,7 +22,23 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 async function checkAndRunScript() {
-  // Функция ожидания элемента по селектору
+  const existingCTRContainer = document.getElementById('ctr-container');
+  if (existingCTRContainer) {
+    existingCTRContainer.remove();
+  }
+  const existingDownloadButton = document.getElementById('download-button');
+  if (existingDownloadButton) {
+    existingDownloadButton.remove();
+  }
+  const existingStatsSummary = document.getElementById('stats-summary');
+  if (existingStatsSummary) {
+    existingStatsSummary.remove();
+  }
+  const executedFlag = document.querySelector('#ctr-script-executed');
+  if (executedFlag) {
+    executedFlag.remove();
+  }
+
   function waitForElement(selector, timeout = 10000) {
     return new Promise((resolve, reject) => {
       const interval = setInterval(() => {
@@ -39,7 +55,6 @@ async function checkAndRunScript() {
     });
   }
 
-  // Функция изменения заголовка с периодом
   async function changePeriodTitle(dateFromURL, dateToURL) {
     try {
       const periodTitleElement = await waitForElement(
@@ -62,13 +77,9 @@ async function checkAndRunScript() {
   }
 
   try {
-    // Ожидаем основные элементы на странице
-    const chartContainer = await waitForElement('.styles-chart-R_KjW');
     const titleContainer = await waitForElement('.styles-title-AvKGs');
-    // Контейнер, где лежит вся статистика (Показы, Просмотры, Контакты, конверсии и т.д.)
     const funnelContainer = await waitForElement('.styles-funnel-8kT87');
 
-    // Извлекаем параметры из URL
     const currentUrl = window.location.href;
     const decodedUrl = decodeURIComponent(currentUrl);
     const itemIdMatch = decodedUrl.match(/expandedItemId=(\d+)/);
@@ -83,10 +94,8 @@ async function checkAndRunScript() {
       return;
     }
 
-    // Меняем заголовок периода
     await changePeriodTitle(dateFromURL, dateToURL);
 
-    // Запрашиваем статистику за указанный период
     const responseFull = await fetch('https://www.avito.ru/web/2/sellers/pro/statistics/item', {
       method: 'POST',
       headers: {
@@ -103,12 +112,10 @@ async function checkAndRunScript() {
     if (!responseFull.ok) {
       throw new Error(`Ошибка HTTP (полный период): ${responseFull.status}`);
     }
-
     const dataFull = await responseFull.json();
     const statsFull = dataFull.data;
     if (!statsFull || !statsFull.length) return;
 
-    // Обновляем значения для "Показы", "Просмотры" и "Контакты" из funnelSteps
     const funnelStepsData = dataFull.funnelSteps;
     const impressionsValue = funnelStepsData.find(step => step.id === "impressions")?.value;
     const viewsValue = funnelStepsData.find(step => step.id === "views")?.value;
@@ -136,7 +143,6 @@ async function checkAndRunScript() {
       }
     }
 
-    // Обновляем значения для "В избранное" и "Расходы" из funnelCounters
     const funnelCountersData = dataFull.funnelCounters;
     const favoritesValue = funnelCountersData.find(counter => counter.id === "favorites")?.value;
     const spendingValue = funnelCountersData.find(counter => counter.id === "spending")?.value;
@@ -158,18 +164,13 @@ async function checkAndRunScript() {
       }
     }
 
-    // ====== Вычисляем конверсии по формулам ======
-    // Для показов: (просмотры / показы) * 100
-    // Для просмотров: (контакты / просмотры) * 100
     const convImpressionsCalculated = impressionsValue > 0 ? (viewsValue / impressionsValue * 100).toFixed(2) : "0.00";
     const convViewsCalculated = viewsValue > 0 ? (contactsValue / viewsValue * 100).toFixed(2) : "0.00";
 
-    // Находим контейнеры для конверсии в блоках с классом styles-counter-TyOZh
     const conversionContainers = Array.from(funnelContainer.querySelectorAll('.styles-counter-TyOZh'))
       .filter(el => el.querySelector('.styles-conversion-j_0of'));
 
     if (conversionContainers.length >= 2) {
-      // Первый контейнер – для конверсии показов, второй – для конверсии просмотров
       const convImpressionsSpan = conversionContainers[0].querySelector('.styles-conversion-j_0of span.styles-module-size_s-Sf21c');
       const convViewsSpan = conversionContainers[1].querySelector('.styles-conversion-j_0of span.styles-module-size_s-Sf21c');
       if (convImpressionsSpan) {
@@ -182,7 +183,6 @@ async function checkAndRunScript() {
       console.warn("Не найдены оба контейнера для конверсии");
     }
 
-    // ====== Логика для расчёта и отображения CTR (без изменений) ======
     function calculateCTR(statsArray) {
       return statsArray.map(dayStat => {
         const impressions = parseFloat(dayStat.impressions) || 0;
@@ -203,7 +203,6 @@ async function checkAndRunScript() {
     }
     const fullPeriodCTRResults = calculateCTR(statsFull);
 
-    // Пример запроса статистики за последние 30 дней для вывода CTR под таблицей
     const today = new Date();
     const date30DaysAgo = new Date(today);
     date30DaysAgo.setDate(today.getDate() - 29);
@@ -229,7 +228,6 @@ async function checkAndRunScript() {
     if (!stats30 || !stats30.length) return;
     const last30DaysCTRResults = calculateCTR(stats30);
 
-    // Находим график и вставляем под ним CTR за 30 дней
     const chartElements = document.querySelectorAll('.styles-chart-R_KjW');
     if (!chartElements.length) return;
     const firstChart = chartElements[0];
@@ -248,7 +246,6 @@ async function checkAndRunScript() {
       });
     }, 300);
 
-    // ====== Кнопка "Скачать CTR отчет" ======
     const downloadButton = document.createElement('button');
     downloadButton.id = 'download-button';
     downloadButton.textContent = 'Скачать CTR отчет';
