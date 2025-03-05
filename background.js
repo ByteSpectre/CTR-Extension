@@ -10,8 +10,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         target: { tabId: tabId },
         files: ['aggregatedReport.js']
       });
-    } else if (tab.url?.startsWith("chrome://")) {
-      return;
+    } else if (tab.url?.startsWith("chrome://")) { return undefined;
     } else {
       chrome.scripting.executeScript({
         target: { tabId: tabId },
