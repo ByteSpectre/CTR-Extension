@@ -1,22 +1,208 @@
-/* modules/accountReport.js */
+(function addInlineStyles() {
+  const css = `
+  /* Кнопка "Аккаунты" */
+  .accounts-button {
+    border: 1px solid #000;
+    background-color: #fff;
+    color: #000;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .accounts-button.active {
+    background-color: #0266a8;
+    color: #fff;
+    border-color: #0266a8;
+  }
+  
+  /* Блок статистики */
+  .accounts-stats {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    align-items: center;
+    font-size: 12px;
+  }
+  .stats-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .stat-item {
+    color: #333;
+  }
+  .stat-label {
+    margin-right: 4px;
+    font-weight: 500;
+  }
+  .stat-value {
+    font-weight: 600;
+    color: #000;
+  }
+  
+  /* Кнопка скачивания Excel */
+  .download-btn {
+    padding: 4px 8px;
+    background-color: #007bff;
+    color: #fff;
+    font-size: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .download-btn:disabled {
+    background-color: #aaa;
+    cursor: not-allowed;
+  }
+  .download-btn svg {
+    fill: currentColor;
+  }
+  .download-btn:hover:enabled {
+    background-color: #005dc1;
+  }
+  
+  /* Таблица и её контейнер */
+  .accounts-table-wrapper {
+    max-height: 350px;
+    overflow: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-top: 5px;
+    transition: max-height 0.3s ease;
+    font-size: 12px;
+  }
+  .accounts-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+  }
+  .accounts-table thead tr {
+    background-color: #f5f5f5;
+    border-bottom: 1px solid #ccc;
+  }
+  .accounts-table th,
+  .accounts-table td {
+    border: 1px solid #ddd;
+    padding: 4px 6px;
+    text-align: center;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .accounts-table th {
+    font-weight: 600;
+    color: #000;
+  }
+  /* Форматирование ячейки "Аккаунт": текст слева, счётчик справа, перенос слов */
+  .account-name {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+  }
+  .account-name-text {
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    text-align: left;
+  }
+  .advert-count {
+    margin-top: 3px;
+    background-color: #e6f4ff;
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 10px;
+    color: #007bff;
+  }
+  
+  /* Фиксированные столбцы */
+  .accounts-table th:first-child,
+  .accounts-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 3;
+  }
+  .accounts-table th:nth-child(2),
+  .accounts-table td:nth-child(2) {
+    position: sticky;
+    left: 60px;
+    background: #fff;
+    z-index: 2;
+    white-space: normal !important;
+    text-align: left;
+  }
+  
+  /* Кнопка "Показать всё" / "Свернуть" */
+  .expand-button-container {
+    text-align: center;
+    margin-top: 10px;
+    padding-bottom: 40px;
+  }
+  .expand-button {
+    display: inline-block;
+    padding: 4px 8px;
+    background-color: #007bff;
+    color: #fff;
+    font-size: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  .expand-button:hover {
+    background-color: #005dc1;
+  }
+  
+  /* Чекбокс */
+  .checkbox-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .account-checkbox {
+    transform: scale(1.2);
+    cursor: pointer;
+  }
+  `;
+  const styleEl = document.createElement('style');
+  styleEl.textContent = css;
+  document.head.appendChild(styleEl);
+})();
 
 (function () {
   console.log("[AccountReport] Модуль отчёта аккаунтов запущен");
 
-  // Функция проверки полной загрузки страницы
+  let dataLoaded = false;
+  let tableVisible = false;
+  let container = null;       // Контейнер для блока статистики и таблицы
+  let tableWrapper = null;    // Контейнер для таблицы
+  let sellerMap = new Map();  // Агрегатор данных продавцов (ключ – sellerUrl)
+
+  // Возвращает Promise, который резолвится через указанное время (ms)
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   function onPageFullyLoaded(callback) {
     if (document.readyState === 'complete') {
       console.log("[AccountReport] Страница полностью загружена");
-      callback();
+      setTimeout(callback, 5000);
     } else {
       window.addEventListener('load', () => {
         console.log("[AccountReport] Событие load: страница полностью загружена");
-        callback();
+        setTimeout(callback, 5000);
       });
     }
   }
 
-  // Проверяем наличие элемента с data-marker="page-title/count"
   if (!document.querySelector('[data-marker="page-title/count"]')) {
     console.log("[AccountReport] Элемент с data-marker='page-title/count' не найден. Функциональность отчёта не запускается.");
     return;
@@ -24,233 +210,249 @@
     console.log("[AccountReport] Элемент с data-marker='page-title/count' найден. Запускаем функционал.");
   }
 
-  // Инициализируем функционал после полной загрузки страницы
   onPageFullyLoaded(initAccountsTab);
 
   function initAccountsTab() {
-    if (document.getElementById('accounts-button-container')) {
-      return;
-    }
-    // Находим элементы-родители по классам
+    if (document.getElementById('accounts-button-container')) return;
+    // Используем селекторы для вставки кнопки
     const topPanelBlock = document.querySelector('.index-topPanel-FOjk0');
     const stickyPanel = document.querySelector('.index-root-gtkvj');
-  
     if (topPanelBlock && stickyPanel) {
-      // Создаем контейнер для кнопки
-      const container = document.createElement('div');
-      container.id = 'accounts-button-container';
-      // Минимальные стили контейнера
-      container.style.display = 'flex';
-      container.style.alignItems = 'center';
-      container.style.padding = '5px';
-      container.style.margin = '0 10px';
-  
-      // Вставляем контейнер между topPanelBlock и stickyPanel
-      topPanelBlock.parentNode.insertBefore(container, stickyPanel);
-  
-      // Создаем кнопку "Аккаунты"
-      const accountsTab = document.createElement('div');
-      accountsTab.className = 'tab';
-      accountsTab.dataset.tabId = 'accounts';
+      const containerBtn = document.createElement('div');
+      containerBtn.id = 'accounts-button-container';
+      containerBtn.style.display = 'flex';
+      containerBtn.style.alignItems = 'center';
+      containerBtn.style.paddingBottom = '25px';
+      containerBtn.style.margin = '0 10px';
+      topPanelBlock.parentNode.insertBefore(containerBtn, stickyPanel);
+      const accountsTab = document.createElement('button');
+      accountsTab.className = 'accounts-button';
       accountsTab.textContent = 'Аккаунты';
-      accountsTab.style.cursor = 'pointer';
-  
-      // Добавляем кнопку в созданный контейнер
-      container.appendChild(accountsTab);
-  
-      accountsTab.addEventListener('click', () => {
-        console.log("[AccountReport] Вкладка 'Аккаунты' нажата");
-        loadAccountsData();
-      });
-    } else {
-      // Если не найдены целевые элементы, добавляем кнопку в body
-      const container = document.body;
-      const accountsTab = document.createElement('div');
-      accountsTab.className = 'tab';
-      accountsTab.dataset.tabId = 'accounts';
-      accountsTab.textContent = 'Аккаунты';
-      accountsTab.style.cursor = 'pointer';
-      container.appendChild(accountsTab);
-  
-      accountsTab.addEventListener('click', () => {
-        console.log("[AccountReport] Вкладка 'Аккаунты' нажата");
-        loadAccountsData();
-      });
-    }
-  }  
-  
-
-  async function loadAccountsData() {
-    console.log("[AccountReport] loadAccountsData запущена");
-  
-    // Удаляем ранее созданный контейнер статистики, если он есть
-    const existingContainer = document.getElementById('accounts-container');
-    if (existingContainer) {
-      console.log("[AccountReport] Удаляем ранее созданный контейнер статистики");
-      existingContainer.remove();
-    }
-    
-    // Создаем контейнер для статистики
-    const container = document.createElement('div');
-    container.id = 'accounts-container';
-    container.style.margin = '10px 0';
-    
-    // Находим контейнер кнопки
-    const buttonContainer = document.getElementById('accounts-button-container');
-    if (buttonContainer) {
-      // Вставляем контейнер статистики сразу после контейнера кнопки
-      buttonContainer.parentNode.insertBefore(container, buttonContainer.nextSibling);
-    } else {
-      // Если контейнер кнопки не найден, добавляем в конец body
-      document.body.appendChild(container);
-    }
-    
-    console.log("[AccountReport] Создан контейнер для статистики");
-    // Выводим сообщение о загрузке
-    container.textContent = 'Загрузка статистики...';
-
-// Собираем ссылки на продавцов по указанному селектору
-const adLinks = Array.from(
-  document.querySelectorAll('a.styles-module-root-m3BML.styles-module-root_noVisited-HHF0s.styles-module-root_preset_black-ydSp2')
-).map(link => {
-  let href = link.getAttribute('href');
-  if (href && href.startsWith('/')) {
-    href = 'https://www.avito.ru' + href;
-  }
-  return href;
-});
-
-console.log("[AccountReport] Найдено ссылок на продавцов:", adLinks.length);
-
-
-    // Объект для агрегации данных по продавцам
-    const accountsMap = new Map();
-
-    // Обрабатываем каждое объявление последовательно для контроля частоты запросов
-    for (const url of adLinks) {
-      console.log("[AccountReport] Обрабатываем ссылку:", url);
-      try {
-        const sellerData = await fetchSellerData(url);
-        console.log("[AccountReport] Получены данные продавца:", sellerData);
-        // Используем id продавца или его имя в качестве ключа
-        const key = sellerData.id || sellerData.name;
-        if (accountsMap.has(key)) {
-          const existing = accountsMap.get(key);
-          existing.listingCount += 1;
+      containerBtn.appendChild(accountsTab);
+      accountsTab.addEventListener('click', async () => {
+        if (!dataLoaded) {
+          console.log("[AccountReport] Первый клик: создаём таблицу и начинаем динамическое обновление");
+          createTableStructure();
+          disableDownloadBtn(true);
+          await processAdsSequentially();
+          dataLoaded = true;
+          tableVisible = true;
+          accountsTab.classList.add('active');
+          disableDownloadBtn(false);
         } else {
-          sellerData.listingCount = 1;
-          accountsMap.set(key, sellerData);
+          // При повторном клике скрываем таблицу и кнопку разворачивания (display: none)
+          if (tableVisible) {
+            tableWrapper.style.display = 'none';
+          } else {
+            tableWrapper.style.display = '';
+          }
+          toggleTableDisplay(accountsTab);
         }
-      } catch (error) {
-        console.error(`[AccountReport] Ошибка при получении данных для ${url}:`, error);
-      }
+      });
+    } else {
+      const containerBtn = document.body;
+      const accountsTab = document.createElement('button');
+      accountsTab.className = 'accounts-button';
+      accountsTab.textContent = 'Аккаунты';
+      containerBtn.appendChild(accountsTab);
+      accountsTab.addEventListener('click', async () => {
+        if (!dataLoaded) {
+          createTableStructure();
+          disableDownloadBtn(true);
+          await processAdsSequentially();
+          dataLoaded = true;
+          tableVisible = true;
+          accountsTab.classList.add('active');
+          disableDownloadBtn(false);
+        } else {
+          if (tableVisible) {
+            tableWrapper.style.display = 'none';
+          } else {
+            tableWrapper.style.display = '';
+          }
+          toggleTableDisplay(accountsTab);
+        }
+      });
     }
-
-    console.log("[AccountReport] Агрегация завершена. Количество уникальных продавцов:", accountsMap.size);
-
-    // Формируем блок общей статистики и таблицу аккаунтов
-    const statsBlock = createStatsBlock(adLinks.length, accountsMap.size);
-    const table = createAccountsTable(Array.from(accountsMap.values()));
-
-    // Очищаем контейнер загрузки и вставляем собранные элементы
-    container.innerHTML = '';
-    container.appendChild(statsBlock);
-    container.appendChild(table);
-
-    // Инициализируем сортировку по столбцам и функционал экспорта в CSV
-    attachTableSorting(table);
-    attachExcelDownload(statsBlock, table);
-    console.log("[AccountReport] Отчет по аккаунтам успешно сформирован");
   }
 
-  // Функция для получения данных о продавце со страницы объявления
-  async function fetchSellerData(url) {
-    console.log("[AccountReport] Запрос данных продавца по URL:", url);
-    const response = await fetch(url, { credentials: 'include' });
-    if (!response.ok) throw new Error(`Ошибка: ${response.status}`);
+  function toggleTableDisplay(button) {
+    if (!tableWrapper) return;
+    if (tableVisible) {
+      tableWrapper.style.display = 'none';
+      button.classList.remove('active');
+      tableVisible = false;
+    } else {
+      tableWrapper.style.display = '';
+      button.classList.add('active');
+      tableVisible = true;
+    }
+  }
+
+  function disableDownloadBtn(disable) {
+    const btn = document.querySelector('#downloadExcel');
+    if (btn) {
+      btn.disabled = disable;
+    }
+  }
+
+  // Запрос данных с объявления (просмотры и имя аккаунта)
+  async function fetchAdData(adUrl) {
+    console.log("[AccountReport] Запрос данных объявления по URL:", adUrl);
+    const response = await fetch(adUrl, { credentials: 'include' });
+    if (!response.ok) throw new Error(`Ошибка при загрузке объявления: ${response.status}`);
+    const htmlText = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, 'text/html');
+    const totalViewsElem = doc.querySelector('[data-marker="item-view/total-views"]');
+    const todayViewsElem = doc.querySelector('[data-marker="item-view/today-views"]');
+    let sellerName = 'Неизвестно';
+    const sellerNameContainer = doc.querySelector('div[data-marker="seller-info/name"] a span')
+                              || doc.querySelector('div[data-marker="seller-info/name"] a');
+    if (sellerNameContainer) {
+      sellerName = sellerNameContainer.textContent.trim();
+    }
+    return {
+      totalViews: totalViewsElem ? parseInt(totalViewsElem.textContent.trim().replace(/\D/g, '')) : 0,
+      todayViews: todayViewsElem ? parseInt(todayViewsElem.textContent.trim().replace(/\D/g, '')) : 0,
+      sellerName
+    };
+  }
+
+  // Запрос данных с страницы продавца
+  async function fetchSellerData(sellerUrl) {
+    console.log("[AccountReport] Запрос данных продавца по URL:", sellerUrl);
+    const response = await fetch(sellerUrl, { credentials: 'include' });
+    if (!response.ok) throw new Error(`Ошибка при загрузке продавца: ${response.status}`);
     const htmlText = await response.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlText, 'text/html');
     console.log("[AccountReport] Страница продавца загружена и распарсена");
-
-    // Извлечение статистики – селекторы могут потребовать корректировки под фактическую разметку
-    const sellerNameElem = doc.querySelector('p.styles-module-root-s4tZ2.styles-module-size_s-PDQal').textContent.trim();
-    const todayViewsElem = doc.querySelector('[data-marker="item-view/today-views"]');
-    const totalViewsElem = doc.querySelector('[data-marker="item-view/total-views"]');
-    const ratingElem = doc.querySelector('[data-marker="seller-rating/score"]');
-    const reviewsElem = doc.querySelector('[data-marker="seller-rating/summary"]');
     const answerTimeElem = doc.querySelector('[data-marker="answer-time"]');
-    const counters = document.querySelectorAll('span.styles-module-counter-qyO5b.styles-module-counter_size-xxl-_hqhd');
-    const activeAdsElem = counters[0] ? counters[0].textContent.trim() : '-';
-    const completedAdsElem = counters[1] ? counters[1].textContent.trim() : '-';
-    const favText = document.querySelector('[data-marker="favorite-seller-counters"]').textContent;
-    const [subscribersElem, subscriptionsElem] = favText.split(',').map(item => item.replace(/\D/g, '').trim());
+    const answerTime = answerTimeElem ? answerTimeElem.textContent.trim() : '-';
+    const counterElems = Array.from(
+      doc.querySelectorAll('span.styles-module-counter-qyO5b.styles-module-counter_size-xxl-_hqhd')
+    );
+    const activeAds = counterElems[0] ? counterElems[0].textContent.trim() : '-';
+    const completedAds = counterElems[1] ? counterElems[1].textContent.trim() : '-';
+    let subscribers = '-', subscriptions = '-';
+    const favSellerElem = doc.querySelector('[data-marker="favorite-seller-counters"]');
+    if (favSellerElem) {
+      const parts = favSellerElem.textContent.split(',');
+      if (parts.length === 2) {
+        subscribers = parts[0].replace(/\D/g, '').trim();
+        subscriptions = parts[1].replace(/\D/g, '').trim();
+      }
+    }
     const registeredElem = doc.querySelector('[data-marker="registered"]');
-
+    const registered = registeredElem ? registeredElem.textContent.trim() : '-';
     return {
-      id: sellerNameElem ? sellerNameElem.textContent.trim() : url,
-      name: sellerNameElem ? sellerNameElem.textContent.trim() : 'Неизвестно',
-      todayViews: todayViewsElem ? todayViewsElem.textContent.trim() : '-',
-      totalViews: totalViewsElem ? totalViewsElem.textContent.trim() : '-',
-      rating: ratingElem ? ratingElem.textContent.trim() : '-',
-      reviewCount: reviewsElem ? reviewsElem.textContent.trim() : '-',
-      answerTime: answerTimeElem ? answerTimeElem.textContent.trim() : '-',
-      activeAds: activeAdsElem ? activeAdsElem.textContent.trim() : '-',
-      completedAds: completedAdsElem ? completedAdsElem.textContent.trim() : '-',
-      avitoSells: sellsElem ? sellsElem.textContent.trim() : '-',
-      avitoBuys: buysElem ? buysElem.textContent.trim() : '-',
-      subscribers: subscribersElem ? subscribersElem.textContent.trim() : '-',
-      subscriptions: subscriptionsElem ? subscriptionsElem.textContent.trim() : '-',
-      registered: registeredElem ? registeredElem.textContent.trim() : '-'
+      answerTime,
+      activeAds,
+      completedAds,
+      subscribers,
+      subscriptions,
+      registered
     };
   }
 
-  // Формирование блока общей статистики
-  function createStatsBlock(totalAds, uniqueSellers) {
-    const statsDiv = document.createElement('div');
-    statsDiv.className = 'accounts-stats';
-    const statsContainer = document.createElement('div');
-    statsContainer.className = 'stats-container';
+  // Создаем таблицу и агрегируем данные по продавцам (по sellerUrl)
+  function createTableStructure() {
+    // Очищаем предыдущие данные
+    sellerMap.clear();
 
-    const statItems = [
-      { label: 'Объявлений на странице:', value: totalAds },
-      { label: 'Продавцов на странице:', value: uniqueSellers }
-    ];
+    // Создаем контейнер для статистики и таблицы
+    container = document.createElement('div');
+    container.id = 'accounts-container';
+    container.style.marginBottom = '25px';
+    const btnContainer = document.getElementById('accounts-button-container');
+    if (btnContainer) {
+      btnContainer.parentNode.insertBefore(container, btnContainer.nextSibling);
+    } else {
+      document.body.appendChild(container);
+    }
 
-    statItems.forEach(item => {
-      const itemDiv = document.createElement('div');
-      itemDiv.className = 'stat-item';
-      itemDiv.innerHTML = `<span class="stat-label">${item.label}</span><span class="stat-value">${item.value}</span>`;
-      statsContainer.appendChild(itemDiv);
+    const statsBlock = createStatsBlock(0, 0);
+    container.appendChild(statsBlock);
+
+    tableWrapper = document.createElement('div');
+    tableWrapper.className = 'accounts-table-wrapper';
+    tableWrapper.style.maxHeight = '350px';
+    tableWrapper.style.overflow = 'auto';
+    container.appendChild(tableWrapper);
+
+    // Фильтруем объявления: оставляем только те, где в контейнере .iva-item-sellerInfo-KS9Ob есть вложенные элементы
+    const allAds = Array.from(document.querySelectorAll('[data-marker="item"]'));
+    const filteredAds = allAds.filter(adEl => {
+      const sellerInfoContainer = adEl.querySelector('.iva-item-sellerInfo-KS9Ob');
+      return sellerInfoContainer && sellerInfoContainer.children.length > 0;
+    });
+    console.log("[AccountReport] Найдено объявлений (с профилем):", filteredAds.length);
+    updateStatsBlock(filteredAds.length, filteredAds.length);
+
+    // Агрегируем объявления по sellerUrl
+    sellerMap = new Map();
+    filteredAds.forEach((adEl, index) => {
+      const position = index + 1;
+      const promotionElem = adEl.querySelector('[data-marker="promotion-services"]');
+      const promotion = promotionElem ? promotionElem.textContent.trim() : '-';
+      const ratingElem = adEl.querySelector('[data-marker="seller-rating/score"]');
+      const rating = ratingElem ? ratingElem.textContent.trim() : '-';
+      const reviewsElem = adEl.querySelector('[data-marker="seller-rating/summary"]');
+      const reviews = reviewsElem ? reviewsElem.textContent.trim() : '-';
+
+      const adLinkEl = adEl.querySelector('a[data-marker="item-title"]');
+      let adUrl = adLinkEl ? adLinkEl.getAttribute('href') : null;
+      if (adUrl && adUrl.startsWith('/')) {
+        adUrl = 'https://www.avito.ru' + adUrl;
+      }
+
+      // Проверяем наличие вложенных элементов в контейнере продавца
+      const sellerInfoContainer = adEl.querySelector('.iva-item-sellerInfo-KS9Ob');
+      let sellerUrl = null;
+      if (sellerInfoContainer && sellerInfoContainer.children.length > 0) {
+        const sellerLinkEl = sellerInfoContainer.querySelector('[data-marker="seller-link/link"]') ||
+                               adEl.querySelector('a.styles-module-root-m3BML.styles-module-root_noVisited-HHF0s.styles-module-root_preset_black-ydSp2');
+        sellerUrl = sellerLinkEl ? sellerLinkEl.getAttribute('href') : null;
+        if (sellerUrl && sellerUrl.startsWith('/')) {
+          sellerUrl = 'https://www.avito.ru' + sellerUrl;
+        }
+      }
+      if (!sellerUrl) return; // Пропускаем объявления без ссылки на продавца
+
+      if (sellerMap.has(sellerUrl)) {
+        const entry = sellerMap.get(sellerUrl);
+        entry.listingCount += 1;
+        entry.positions.push(position);
+        entry.adUrls.push(adUrl);
+      } else {
+        sellerMap.set(sellerUrl, {
+          sellerUrl,
+          listingCount: 1,
+          positions: [position],
+          adUrls: [adUrl],
+          promotion,
+          rating,
+          reviews,
+          todayViews: 0,
+          totalViews: 0,
+          answerTime: '-',
+          activeAds: '-',
+          completedAds: '-',
+          subscribers: '-',
+          subscriptions: '-',
+          registered: '-',
+          sellerName: 'Неизвестно'
+        });
+      }
     });
 
-    // Кнопка для экспорта в Excel (CSV)
-    const downloadBtn = document.createElement('button');
-    downloadBtn.id = 'downloadExcel';
-    downloadBtn.className = 'download-btn';
-    downloadBtn.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24">
-        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" fill="currentColor"></path>
-      </svg>
-      Скачать Excel
-    `;
-    statsContainer.appendChild(downloadBtn);
-    statsDiv.appendChild(statsContainer);
-    return statsDiv;
-  }
-
-  // Формирование таблицы с подробными данными по аккаунтам
-  function createAccountsTable(accounts) {
-    const tableWrapper = document.createElement('div');
-    tableWrapper.className = 'accounts-table-wrapper';
-    tableWrapper.dataset.rowCount = accounts.length;
+    // Создаем таблицу из агрегированных данных
     const table = document.createElement('table');
     table.className = 'accounts-table';
-
-    // Заголовок таблицы
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    const headers = [
+    const headersArr = [
       'Пометить на выдаче',
       'Аккаунт',
       'Позиции в выдаче',
@@ -268,10 +470,15 @@ console.log("[AccountReport] Найдено ссылок на продавцов
       'Подписки',
       'На авито с'
     ];
-    headers.forEach(text => {
+    headersArr.forEach(text => {
       const th = document.createElement('th');
       th.textContent = text;
-      if (text !== 'Пометить на выдаче' && text !== 'Аккаунт' && text !== 'Позиции в выдаче' && text !== 'Услуги продвижения') {
+      if (
+        text !== 'Пометить на выдаче' &&
+        text !== 'Аккаунт' &&
+        text !== 'Позиции в выдаче' &&
+        text !== 'Услуги продвижения'
+      ) {
         th.dataset.column = text.replace(/\s+/g, '');
         th.style.cursor = 'pointer';
       }
@@ -279,93 +486,205 @@ console.log("[AccountReport] Найдено ссылок на продавцов
     });
     thead.appendChild(headerRow);
     table.appendChild(thead);
-
-    // Тело таблицы
     const tbody = document.createElement('tbody');
-    accounts.forEach(account => {
+    let originalIndex = 0;
+    sellerMap.forEach(entry => {
       const row = document.createElement('tr');
-
-      // Столбец с чекбоксом
-      const checkboxCell = document.createElement('td');
-      const checkboxWrapper = document.createElement('div');
-      checkboxWrapper.className = 'checkbox-wrapper';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'account-checkbox';
-      checkbox.dataset.profileLink = account.id;
-      checkboxWrapper.appendChild(checkbox);
-      checkboxCell.appendChild(checkboxWrapper);
-      row.appendChild(checkboxCell);
-
-      // Аккаунт (имя и количество объявлений)
-      const accountCell = document.createElement('td');
-      accountCell.innerHTML = `<div class="account-name"><div>${account.name}</div><span class="advert-count">${account.listingCount}</span></div>`;
-      row.appendChild(accountCell);
-
-      // Позиции в выдаче – заглушка
-      const positionsCell = document.createElement('td');
-      positionsCell.textContent = '-';
-      row.appendChild(positionsCell);
-
-      // Услуги продвижения – заглушка
-      const promotionCell = document.createElement('td');
-      promotionCell.innerHTML = '<div class="table-vas-container">-</div>';
-      row.appendChild(promotionCell);
-
-      // Остальные столбцы с данными
-      const dataColumns = [
-        account.todayViews,
-        account.totalViews,
-        account.rating,
-        account.reviewCount,
-        account.answerTime,
-        account.activeAds,
-        account.completedAds,
-        account.avitoSells,
-        account.avitoBuys,
-        account.subscribers,
-        account.subscriptions,
-        account.registered
-      ];
-      dataColumns.forEach(val => {
-        const td = document.createElement('td');
-        td.textContent = val;
-        row.appendChild(td);
-      });
+      row.dataset.originalIndex = originalIndex++;
+      // Чекбокс (col0)
+      const checkboxCell = `<td><div class="checkbox-wrapper"><input type="checkbox" class="account-checkbox" data-profile-link="${entry.sellerUrl}"></div></td>`;
+      // Аккаунт (col1) – имя продавца и количество объявлений
+      const accountCell = `<td><div class="account-name"><div class="account-name-text">${entry.sellerName}</div><span class="advert-count">${entry.listingCount}</span></div></td>`;
+      // Остальные 14 ячеек (col2-col15)
+      const rowHTML = `
+        <td>${entry.positions.join(', ')}</td>                      <!-- Позиции в выдаче (col2) -->
+        <td><div class="table-vas-container">${entry.promotion}</div></td> <!-- Услуги продвижения (col3) -->
+        <td>-</td>                                                    <!-- Просмотры сегодня (col4) -->
+        <td>-</td>                                                    <!-- Просмотры всего (col5) -->
+        <td>${entry.rating}</td>                                        <!-- Рейтинг (col6) -->
+        <td>${entry.reviews}</td>                                       <!-- Отзывы (col7) -->
+        <td>-</td>                                                    <!-- Время ответа (col8) -->
+        <td>-</td>                                                    <!-- Активных объявлений (col9) -->
+        <td>-</td>                                                    <!-- Завершённых объявлений (col10) -->
+        <td>-</td>                                                    <!-- Кол-во доставок (col11) -->
+        <td>-</td>                                                    <!-- Кол-во покупок (col12) -->
+        <td>-</td>                                                    <!-- Подписчики (col13) -->
+        <td>-</td>                                                    <!-- Подписки (col14) -->
+        <td>-</td>                                                    <!-- На авито с (col15) -->
+      `;
+      row.innerHTML = checkboxCell + accountCell + rowHTML;
       tbody.appendChild(row);
+      entry.row = row;
     });
     table.appendChild(tbody);
     tableWrapper.appendChild(table);
 
-    // Кнопка "Показать все" для сворачиваемой таблицы
+    const expandBtnContainer = createExpandButton(tableWrapper);
+    container.innerHTML = '';
+    container.appendChild(createStatsBlock(filteredAds.length, filteredAds.length));
+    container.appendChild(tableWrapper);
+    container.parentNode.insertBefore(expandBtnContainer, container.nextSibling);
+  }
+
+  function updateStatsBlock(totalAds, uniqueSellers) {
+    const statsBlock = document.querySelector('.accounts-stats');
+    if (!statsBlock) return;
+    const statItems = statsBlock.querySelectorAll('.stat-item');
+    if (statItems.length >= 2) {
+      statItems[0].querySelector('.stat-value').textContent = totalAds;
+      statItems[1].querySelector('.stat-value').textContent = uniqueSellers;
+    }
+  }
+
+  async function processAdsSequentially() {
+    for (const entry of sellerMap.values()) {
+      let sumTodayViews = 0;
+      let sumTotalViews = 0;
+      for (const adUrl of entry.adUrls) {
+        try {
+          await delay(250 + Math.random() * 250);
+          const adData = await fetchAdData(adUrl);
+          if (entry.sellerName === 'Неизвестно' && adData.sellerName) {
+            entry.sellerName = adData.sellerName;
+          }
+          sumTodayViews += adData.todayViews;
+          sumTotalViews += adData.totalViews;
+        } catch (err) {
+          console.error("[AccountReport] Ошибка получения данных с объявления", adUrl, err);
+        }
+      }
+      entry.todayViews = sumTodayViews;
+      entry.totalViews = sumTotalViews;
+      try {
+        await delay(1000 + Math.random() * 1000);
+        const sellerData = await fetchSellerData(entry.sellerUrl);
+        entry.answerTime = sellerData.answerTime;
+        entry.activeAds = sellerData.activeAds;
+        entry.completedAds = sellerData.completedAds;
+        entry.subscribers = sellerData.subscribers;
+        entry.subscriptions = sellerData.subscriptions;
+        entry.registered = sellerData.registered;
+      } catch (err) {
+        console.error("[AccountReport] Ошибка получения данных продавца", entry.sellerUrl, err);
+      }
+      const rowCells = entry.row.querySelectorAll('td');
+      // Обновляем ячейку "Аккаунт" (col1)
+      const accountCell = rowCells[1];
+      const nameDiv = accountCell.querySelector('.account-name-text');
+      if (nameDiv) {
+        nameDiv.textContent = entry.sellerName;
+      }
+      accountCell.querySelector('.advert-count').textContent = entry.listingCount;
+      // Обновляем ячейки "Просмотры сегодня" (col4) и "Просмотры всего" (col5)
+      rowCells[4].textContent = entry.todayViews;
+      rowCells[5].textContent = entry.totalViews;
+      // Обновляем данные продавца (col8, col9, col10, col13, col14, col15)
+      rowCells[8].textContent = entry.answerTime;
+      rowCells[9].textContent = entry.activeAds;
+      rowCells[10].textContent = entry.completedAds;
+      rowCells[13].textContent = entry.subscribers;
+      rowCells[14].textContent = entry.subscriptions;
+      rowCells[15].textContent = entry.registered;
+    }
+  }
+
+  function createExpandButton(tableWrapper) {
     const expandContainer = document.createElement('div');
     expandContainer.className = 'expand-button-container';
     const expandButton = document.createElement('div');
     expandButton.className = 'expand-button';
-    expandButton.textContent = 'Показать все';
+    expandButton.textContent = 'Показать всё';
+    let expanded = false;
     expandButton.addEventListener('click', () => {
-      tableWrapper.style.maxHeight = 'none';
-      expandButton.style.display = 'none';
-      console.log("[AccountReport] Таблица развернута");
+      if (!tableWrapper) return;
+      if (!expanded) {
+        tableWrapper.style.maxHeight = 'none';
+        expandButton.textContent = 'Свернуть';
+        expanded = true;
+      } else {
+        tableWrapper.style.maxHeight = '350px';
+        expandButton.textContent = 'Показать всё';
+        expanded = false;
+      }
     });
     expandContainer.appendChild(expandButton);
-    tableWrapper.appendChild(expandContainer);
-    return tableWrapper;
+    return expandContainer;
   }
 
-  // Функции сортировки таблицы
+  function createStatsBlock(totalAds, uniqueSellers) {
+    const statsDiv = document.createElement('div');
+    statsDiv.className = 'accounts-stats';
+    const statsContainer = document.createElement('div');
+    statsContainer.className = 'stats-container';
+    const statItems = [
+      { label: 'Объявлений на странице:', value: totalAds },
+      { label: 'Продавцов на странице:', value: uniqueSellers }
+    ];
+    statItems.forEach(item => {
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'stat-item';
+      itemDiv.innerHTML = `
+        <span class="stat-label">${item.label}</span>
+        <span class="stat-value">${item.value}</span>
+      `;
+      statsContainer.appendChild(itemDiv);
+    });
+    const downloadBtn = document.createElement('button');
+    downloadBtn.id = 'downloadExcel';
+    downloadBtn.className = 'download-btn';
+    downloadBtn.disabled = true;
+    downloadBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24">
+        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" fill="currentColor"></path>
+      </svg>
+      Скачать Excel
+    `;
+    statsContainer.appendChild(downloadBtn);
+    statsDiv.appendChild(statsContainer);
+    return statsDiv;
+  }
+
   function attachTableSorting(table) {
     const headers = table.querySelectorAll('th[data-column]');
     headers.forEach(th => {
       th.addEventListener('click', () => {
-        const column = th.dataset.column;
-        console.log("[AccountReport] Сортировка по столбцу:", column);
-        sortTableByColumn(table, column);
+        tripleToggleSort(table, th.dataset.column);
       });
     });
   }
 
-  function sortTableByColumn(table, column) {
+  // Тройная сортировка: none -> asc -> desc -> none
+  function tripleToggleSort(table, column) {
+    const currentState = table.getAttribute(`data-sort-state-${column}`) || 'none';
+    let newState;
+    if (currentState === 'none') {
+      newState = 'asc';
+    } else if (currentState === 'asc') {
+      newState = 'desc';
+    } else {
+      newState = 'none';
+    }
+    table.setAttribute(`data-sort-state-${column}`, newState);
+    if (newState === 'none') {
+      restoreOriginalOrder(table);
+    } else {
+      sortTableByColumn(table, column, newState);
+    }
+  }
+
+  function restoreOriginalOrder(table) {
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => {
+      const idxA = parseInt(a.dataset.originalIndex, 10);
+      const idxB = parseInt(b.dataset.originalIndex, 10);
+      return idxA - idxB;
+    });
+    rows.forEach(row => tbody.appendChild(row));
+    console.log("[AccountReport] Восстановлен исходный порядок (none).");
+  }
+
+  function sortTableByColumn(table, column, order) {
     const tbody = table.querySelector('tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
     const headerCells = Array.from(table.querySelectorAll('thead th'));
@@ -375,23 +694,19 @@ console.log("[AccountReport] Найдено ссылок на продавцов
       const text = row.children[colIndex].textContent.trim();
       return !isNaN(parseFloat(text));
     });
-    let currentOrder = table.getAttribute('data-sort-order-' + column) || 'asc';
-    const newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
-    table.setAttribute('data-sort-order-' + column, newOrder);
     rows.sort((a, b) => {
       const aText = a.children[colIndex].textContent.trim();
       const bText = b.children[colIndex].textContent.trim();
       let aVal = isNumeric ? parseFloat(aText) : aText.toLowerCase();
       let bVal = isNumeric ? parseFloat(bText) : bText.toLowerCase();
-      if (aVal < bVal) return newOrder === 'asc' ? -1 : 1;
-      if (aVal > bVal) return newOrder === 'asc' ? 1 : -1;
+      if (aVal < bVal) return order === 'asc' ? -1 : 1;
+      if (aVal > bVal) return order === 'asc' ? 1 : -1;
       return 0;
     });
     rows.forEach(row => tbody.appendChild(row));
-    console.log("[AccountReport] Таблица отсортирована по столбцу:", column, "в порядке:", newOrder);
+    console.log("[AccountReport] Таблица отсортирована по столбцу:", column, "в порядке:", order);
   }
 
-  // Экспорт таблицы в CSV (открывается в Excel)
   function attachExcelDownload(statsBlock, tableWrapper) {
     const downloadBtn = statsBlock.querySelector('#downloadExcel');
     downloadBtn.addEventListener('click', () => {
