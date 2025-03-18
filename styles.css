@@ -1,0 +1,144 @@
+/* Общие стили */
+body {
+  font-family: "JetBrains Mono";
+  
+  margin: 0;
+  padding: 20px;
+  width: 450px;
+  background-color: #f7f7f7;
+}
+
+.container {
+  max-width: 380px;
+  margin: 0 auto;
+  background-color: #fff;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+/* Заголовок */
+h3 {
+  text-align: center;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+/* Вкладки (Переключатели "По запросам" / "По категориям") */
+.tabs {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 8px;
+  background-color: #eaeaea;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s;
+}
+
+.tab-button:hover {
+  background-color: #ddd;
+}
+
+.tab-button.active {
+  background-color: #fff;
+  border-bottom: 2px solid #000;
+  cursor: default;
+}
+
+/* Метки и поля */
+label {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 4px;
+  font-weight: 500;
+  color: #444;
+}
+
+textarea,
+input[type="text"],
+input[type="number"],
+select {
+  width: 100%;
+  padding: 6px 8px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+  box-sizing: border-box;
+}
+
+textarea {
+  resize: vertical;
+  height: 60px; /* при необходимости изменить */
+}
+
+/* Кнопка */
+button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+  background-color: #0078d7;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background-color: #005ea1;
+}
+
+/* Радиокнопки и чекбоксы в одной строке */
+.radio-row,
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-top: 5px;
+}
+
+.radio-row label,
+.checkbox-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Прогресс-бар и вывод прогресса */
+.progressContainer {
+  margin-top: 15px;
+}
+
+progress {
+  width: 100%;
+  height: 10px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+#progressText,
+#parsedCount {
+  display: block;
+  font-size: 13px;
+  color: #666;
+  margin-top: 5px;
+  text-align: left; /* или center, если хотите */
+}

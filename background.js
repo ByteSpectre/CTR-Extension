@@ -1,3 +1,33 @@
+// background.js
+import { startQueriesParsing, startMarketParsing } from "./modules/analytics.js";
+
+chrome.runtime.onInstalled.addListener(() => {
+  console.log("PDF Generator Extension установлен!");
+  console.log("Объединенное расширение установлено!");
+});
+
+function checkForAccountsReport() {
+  console.log("[Background] Проверка наличия data-marker=\"page-title/count\" на странице");
+  if (document.querySelector('[data-marker="page-title/count"]')) {
+    console.log("[Background] Элемент найден – запускаем функционал отчёта по аккаунтам");
+    // Если accountReport.js уже загружен, можно не загружать повторно
+    if (!document.getElementById('accountReport-loaded')) {
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL("modules/accountReport.js");
+      script.id = "accountReport-loaded";
+      script.defer = true;
+      document.head.appendChild(script);
+      console.log("[Background] Скрипт accountReport.js добавлен");
+    } else {
+      console.log("[Background] Скрипт accountReport.js уже был добавлен ранее");
+    }
+  } else {
+    console.log("[Background] Элемент data-marker=\"page-title/count\" не найден – функционал не запускается");
+  }
+}
+// ==============================
+// Функциональность CTR & агрегированного отчёта
+// ==============================
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && tab.url) {
     if (tab.url.match(/avito\.ru\/profile\/pro\/items\?expandedItemId=\d+/)) {
@@ -10,34 +40,33 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         target: { tabId: tabId },
         files: ['aggregatedReport.js']
       });
-    } else if (tab.url?.startsWith("chrome://")) { return undefined;
+    } else if (tab.url?.startsWith("chrome://")) {
+      return;
     } else {
       chrome.scripting.executeScript({
         target: { tabId: tabId },
         func: removeExecutedFlag
       });
     }
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: checkForAccountsReport
+    });
   }
 });
 
 async function checkAndRunScript() {
+  // Удаляем ранее добавленные элементы, чтобы избежать дублирования
   const existingCTRContainer = document.getElementById('ctr-container');
-  if (existingCTRContainer) {
-    existingCTRContainer.remove();
-  }
+  if (existingCTRContainer) existingCTRContainer.remove();
   const existingDownloadButton = document.getElementById('download-button');
-  if (existingDownloadButton) {
-    existingDownloadButton.remove();
-  }
+  if (existingDownloadButton) existingDownloadButton.remove();
   const existingStatsSummary = document.getElementById('stats-summary');
-  if (existingStatsSummary) {
-    existingStatsSummary.remove();
-  }
+  if (existingStatsSummary) existingStatsSummary.remove();
   const executedFlag = document.querySelector('#ctr-script-executed');
-  if (executedFlag) {
-    executedFlag.remove();
-  }
+  if (executedFlag) executedFlag.remove();
 
+  // Функция ожидания появления элемента
   function waitForElement(selector, timeout = 10000) {
     return new Promise((resolve, reject) => {
       const interval = setInterval(() => {
@@ -54,6 +83,7 @@ async function checkAndRunScript() {
     });
   }
 
+  // Функция для изменения заголовка периода
   async function changePeriodTitle(dateFromURL, dateToURL) {
     try {
       const periodTitleElement = await waitForElement(
@@ -66,9 +96,7 @@ async function checkAndRunScript() {
         'июля','августа','сентября','октября','ноября','декабря'
       ];
       const diffDays = Math.ceil((toDate - fromDate) / (1000 * 60 * 60 * 24)) + 1;
-      const newTitle = `${diffDays} дней: ` +
-        `${fromDate.getDate()} ${monthNames[fromDate.getMonth()]} — ` +
-        `${toDate.getDate()} ${monthNames[toDate.getMonth()]}`;
+      const newTitle = `${diffDays} дней: ${fromDate.getDate()} ${monthNames[fromDate.getMonth()]} — ${toDate.getDate()} ${monthNames[toDate.getMonth()]}`;
       periodTitleElement.textContent = newTitle;
     } catch (error) {
       console.error("Ошибка при изменении заголовка периода:", error);
@@ -101,11 +129,7 @@ async function checkAndRunScript() {
         'Content-Type': 'application/json',
         'Cookie': document.cookie
       },
-      body: JSON.stringify({
-        itemId: itemId,
-        dateFrom: dateFromURL,
-        dateTo: dateToURL
-      })
+      body: JSON.stringify({ itemId, dateFrom: dateFromURL, dateTo: dateToURL })
     });
     
     if (!responseFull.ok) {
@@ -115,6 +139,7 @@ async function checkAndRunScript() {
     const statsFull = dataFull.data;
     if (!statsFull || !statsFull.length) return;
 
+    // Обновляем UI-элементы статистики
     const funnelStepsData = dataFull.funnelSteps;
     const impressionsValue = funnelStepsData.find(step => step.id === "impressions")?.value;
     const viewsValue = funnelStepsData.find(step => step.id === "views")?.value;
@@ -124,22 +149,16 @@ async function checkAndRunScript() {
     const viewsDiv = funnelContainer.querySelector('[data-marker="views"]');
     if (impressionsDiv) {
       const impressionsH5 = impressionsDiv.querySelector('h5');
-      if (impressionsH5) {
-        impressionsH5.textContent = impressionsValue;
-      }
+      if (impressionsH5) impressionsH5.textContent = impressionsValue;
     }
     if (viewsDiv) {
       const viewsH5 = viewsDiv.querySelector('h5');
-      if (viewsH5) {
-        viewsH5.textContent = viewsValue;
-      }
+      if (viewsH5) viewsH5.textContent = viewsValue;
     }
     const contactsDiv = funnelContainer.querySelector('[data-marker="contacts"]');
     if (contactsDiv) {
       const contactsH5 = contactsDiv.querySelector('h5');
-      if (contactsH5) {
-        contactsH5.textContent = contactsValue;
-      }
+      if (contactsH5) contactsH5.textContent = contactsValue;
     }
 
     const funnelCountersData = dataFull.funnelCounters;
@@ -150,16 +169,12 @@ async function checkAndRunScript() {
       const favoritesDiv = extraContainer.querySelector('[data-marker="favorites"]');
       if (favoritesDiv) {
         const favoritesH5 = favoritesDiv.querySelector('h5');
-        if (favoritesH5) {
-          favoritesH5.textContent = favoritesValue;
-        }
+        if (favoritesH5) favoritesH5.textContent = favoritesValue;
       }
       const spendingDiv = extraContainer.querySelector('[data-marker="spending"]');
       if (spendingDiv) {
         const spendingH5 = spendingDiv.querySelector('h5');
-        if (spendingH5) {
-          spendingH5.innerHTML = `<span>${spendingValue}&nbsp;<span class="styles-font_rub-NvEsL">₽</span></span>`;
-        }
+        if (spendingH5) spendingH5.innerHTML = `<span>${spendingValue}&nbsp;<span class="styles-font_rub-NvEsL">₽</span></span>`;
       }
     }
 
@@ -172,12 +187,8 @@ async function checkAndRunScript() {
     if (conversionContainers.length >= 2) {
       const convImpressionsSpan = conversionContainers[0].querySelector('.styles-conversion-j_0of span.styles-module-size_s-Sf21c');
       const convViewsSpan = conversionContainers[1].querySelector('.styles-conversion-j_0of span.styles-module-size_s-Sf21c');
-      if (convImpressionsSpan) {
-        convImpressionsSpan.textContent = convImpressionsCalculated + '%';
-      }
-      if (convViewsSpan) {
-        convViewsSpan.textContent = convViewsCalculated + '%';
-      }
+      if (convImpressionsSpan) convImpressionsSpan.textContent = convImpressionsCalculated + '%';
+      if (convViewsSpan) convViewsSpan.textContent = convViewsCalculated + '%';
     } else {
       console.warn("Не найдены оба контейнера для конверсии");
     }
@@ -213,11 +224,7 @@ async function checkAndRunScript() {
         'Content-Type': 'application/json',
         'Cookie': document.cookie
       },
-      body: JSON.stringify({
-        itemId: itemId,
-        dateFrom: date30Str,
-        dateTo: todayStr
-      })
+      body: JSON.stringify({ itemId, dateFrom: date30Str, dateTo: todayStr })
     });
     if (!response30.ok) {
       throw new Error(`Ошибка HTTP (30 дней): ${response30.status}`);
@@ -244,7 +251,7 @@ async function checkAndRunScript() {
         ctrContainer.appendChild(dayBlock);
       });
     }, 300);
-
+  
     const downloadButton = document.createElement('button');
     downloadButton.id = 'download-button';
     downloadButton.textContent = 'Скачать CTR отчет';
@@ -287,3 +294,16 @@ function removeExecutedFlag() {
   const executedFlag = document.querySelector('#ctr-script-executed');
   if (executedFlag) executedFlag.remove();
 }
+
+// ==============================
+// Слушатель сообщений для аналитики (popup)
+// ==============================
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'startParsing') {
+    startQueriesParsing(message.data);
+    sendResponse({ status: 'started' });
+  } else if (message.action === 'startMarketParsing') {
+    startMarketParsing(message.data);
+    sendResponse({ status: 'started' });
+  }
+});
