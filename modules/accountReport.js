@@ -127,8 +127,7 @@ console.log("[AccountReport] Найдено ссылок на продавцов
     const accountsMap = new Map();
 
     // Обрабатываем каждое объявление последовательно для контроля частоты запросов
-    for (const link of adLinks) {
-      const url = link.href;
+    for (const url of adLinks) {
       console.log("[AccountReport] Обрабатываем ссылку:", url);
       try {
         const sellerData = await fetchSellerData(url);
@@ -175,19 +174,18 @@ console.log("[AccountReport] Найдено ссылок на продавцов
     console.log("[AccountReport] Страница продавца загружена и распарсена");
 
     // Извлечение статистики – селекторы могут потребовать корректировки под фактическую разметку
-    const sellerNameElem = doc.querySelector('.seller-name');
-    const todayViewsElem = doc.querySelector('[data-marker="seller-todayViews"]');
-    const totalViewsElem = doc.querySelector('[data-marker="seller-totalViews"]');
-    const ratingElem = doc.querySelector('[data-marker="seller-rating"]');
-    const reviewsElem = doc.querySelector('[data-marker="seller-reviews"]');
-    const answerTimeElem = doc.querySelector('[data-marker="seller-answerTime"]');
-    const activeAdsElem = doc.querySelector('[data-marker="seller-activeAds"]');
-    const completedAdsElem = doc.querySelector('[data-marker="seller-completedAds"]');
-    const sellsElem = doc.querySelector('[data-marker="seller-avitoSells"]');
-    const buysElem = doc.querySelector('[data-marker="seller-avitoBuys"]');
-    const subscribersElem = doc.querySelector('[data-marker="seller-subscribers"]');
-    const subscriptionsElem = doc.querySelector('[data-marker="seller-subscriptions"]');
-    const registeredElem = doc.querySelector('[data-marker="seller-registered"]');
+    const sellerNameElem = doc.querySelector('p.styles-module-root-s4tZ2.styles-module-size_s-PDQal').textContent.trim();
+    const todayViewsElem = doc.querySelector('[data-marker="item-view/today-views"]');
+    const totalViewsElem = doc.querySelector('[data-marker="item-view/total-views"]');
+    const ratingElem = doc.querySelector('[data-marker="seller-rating/score"]');
+    const reviewsElem = doc.querySelector('[data-marker="seller-rating/summary"]');
+    const answerTimeElem = doc.querySelector('[data-marker="answer-time"]');
+    const counters = document.querySelectorAll('span.styles-module-counter-qyO5b.styles-module-counter_size-xxl-_hqhd');
+    const activeAdsElem = counters[0] ? counters[0].textContent.trim() : '-';
+    const completedAdsElem = counters[1] ? counters[1].textContent.trim() : '-';
+    const favText = document.querySelector('[data-marker="favorite-seller-counters"]').textContent;
+    const [subscribersElem, subscriptionsElem] = favText.split(',').map(item => item.replace(/\D/g, '').trim());
+    const registeredElem = doc.querySelector('[data-marker="registered"]');
 
     return {
       id: sellerNameElem ? sellerNameElem.textContent.trim() : url,
