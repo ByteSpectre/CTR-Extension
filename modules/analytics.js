@@ -198,8 +198,14 @@ let currentStepCategories = 0;
 let stopParsingCategories = false;
 
 function getCategoryId(categoryName) {
-  const key = categoryName.trim().toLowerCase();
-  return categoryMapping[key] || null;
+  const trimmed = categoryName.trim();
+  // Если введено число (лишь цифры), считаем, что это id
+  if (/^\d+$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+  // Иначе ищем по имени (в нижнем регистре)
+  const key = trimmed.toLowerCase();
+  return categoryMapping[key] ? Number(categoryMapping[key]) : null;
 }
 
 function updateCategoriesProgress(progress) {
