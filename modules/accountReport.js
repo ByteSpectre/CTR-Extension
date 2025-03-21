@@ -133,7 +133,7 @@
   .accounts-table th:nth-child(2),
   .accounts-table td:nth-child(2) {
     position: sticky;
-    left: 60px;
+    left: 137px;
     background: #fff;
     z-index: 2;
     white-space: normal !important;
@@ -926,5 +926,5 @@ attachExcelDownload(newStatsBlock, tableWrapper);
       console.log("[AccountReport] Экспорт CSV завершён");
     });
   }
-    
+
 })();
