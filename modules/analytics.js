@@ -10,7 +10,7 @@ function delay(ms) {
 }
 
 function getRandomDelay() {
-  return Math.floor(Math.random() * 2000) + 1000;
+  return Math.floor(Math.random() * 1000) + 1000;
 }
 
 function getSellerText(sellerType) {
@@ -101,6 +101,24 @@ async function sendAnalyticsRequest(singleQuery, region, period) {
   } catch (error) {
     return { error: error.message };
   }
+}
+/**
+ * Возвращает полное название категории, объединяя имя родительской категории
+ * (из summary.parentNodeName) и название самой категории (из последнего элемента breadcrumbs).
+ * Если каких-либо данных нет – возвращает просто id.
+ */
+function getFullCategoryTitle(response) {
+  if (
+    response.summary &&
+    response.summary.parentNodeName &&
+    Array.isArray(response.breadcrumbs) &&
+    response.breadcrumbs.length > 0
+  ) {
+    // Предполагаем, что последний элемент breadcrumbs – это текущая категория
+    const currentCategory = response.breadcrumbs[response.breadcrumbs.length - 1].title;
+    return `${response.summary.parentNodeName}/${currentCategory}`;
+  }
+  return response.summary && response.summary.title ? response.summary.title : response.id;
 }
 
 export async function startQueriesParsing({ queries, regions, period }) {
@@ -324,7 +342,7 @@ async function startMarketParsingInternal({ categories, cities, locationType, lo
           continue;
         }
         let row = [];
-        row.push(catObj.name, cityObj.name, period);
+        row.push(getFullCategoryTitle(data), cityObj.name, period);
         if (locationType !== "none") {
           row.push(locationType === "districts" ? "Районы" : "Метро");
         }

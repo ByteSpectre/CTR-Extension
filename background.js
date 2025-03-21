@@ -10,7 +10,6 @@ function checkForAccountsReport() {
   console.log("[Background] Проверка наличия data-marker=\"page-title/count\" на странице");
   if (document.querySelector('[data-marker="page-title/count"]')) {
     console.log("[Background] Элемент найден – запускаем функционал отчёта по аккаунтам");
-    // Если accountReport.js уже загружен, можно не загружать повторно
     if (!document.getElementById('accountReport-loaded')) {
       const script = document.createElement('script');
       script.src = chrome.runtime.getURL("modules/accountReport.js");
